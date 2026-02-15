@@ -1,8 +1,9 @@
 // Simple Vector Dot Product - TESTED VERSION
-module vector_dot_product #(
+module vector_dot_product 
+    import microgpt_pkg::*;
+#(
     parameter int VEC_LEN = 16
 ) 
-    import microgpt_pkg::*;
 (
     input  logic        clk,
     input  logic        rst_n,

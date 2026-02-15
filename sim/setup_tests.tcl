@@ -25,9 +25,27 @@ proc setup_test {test_name} {
             add_files -fileset sim_1 -norecurse tb/tb_param_memory.sv
             set_property top tb_param_memory [get_filesets sim_1]
         }
+        "matrix_vector" {
+            add_files -fileset sim_1 -norecurse rtl/vector_dot_product.sv
+            add_files -fileset sim_1 -norecurse rtl/matrix_vector_mult.sv
+            add_files -fileset sim_1 -norecurse tb/tb_matrix_vector_mult.sv
+            set_property top tb_matrix_vector_mult [get_filesets sim_1]
+        }
+        "rmsnorm" {
+            add_files -fileset sim_1 -norecurse rtl/rmsnorm.sv
+            add_files -fileset sim_1 -norecurse tb/tb_rmsnorm.sv
+            set_property top tb_rmsnorm [get_filesets sim_1]
+        }
+        "softmax" {
+            add_files -fileset sim_1 -norecurse rtl/softmax.sv
+            add_files -fileset sim_1 -norecurse tb/tb_softmax.sv
+            set_property top tb_softmax [get_filesets sim_1]
+        }
         default {
             puts "ERROR: Unknown test '$test_name'"
-            puts "Available tests: fixed_point, vector_dot, param_mem"
+            puts "Available tests:"
+            puts "  LEVEL 0-1: fixed_point, vector_dot, param_mem"
+            puts "  LEVEL 2:   matrix_vector, rmsnorm, softmax"
             return
         }
     }
@@ -44,4 +62,17 @@ proc setup_test {test_name} {
 
 puts "Test setup commands loaded!"
 puts "Usage: setup_test <test_name>"
-puts "Tests: fixed_point, vector_dot, param_mem"
+puts ""
+puts "Available Tests:"
+puts "  LEVEL 0-1 (Foundation):"
+puts "    fixed_point   - Q8.8 arithmetic verification"
+puts "    vector_dot    - Dot product computation"
+puts "    param_mem     - Parameter memory read/write"
+puts ""
+puts "  LEVEL 2 (Math Operations):"
+puts "    matrix_vector - Matrix-vector multiplication"
+puts "    rmsnorm       - RMS normalization"
+puts "    softmax       - Softmax with temperature"
+puts ""
+puts "Example: setup_test matrix_vector"
+puts "         launch_simulation"

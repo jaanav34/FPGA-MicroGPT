@@ -1,4 +1,4 @@
-// Matrix-Vector Multiplication
+// Matrix-Vector Multiplication - FIXED VERSION
 // Computes y = M * x where M is (ROWS x COLS) and x is (COLS x 1)
 module matrix_vector_mult 
     import microgpt_pkg::*;
@@ -73,8 +73,8 @@ module matrix_vector_mult
                 end
                 
                 MV_COMPUTE: begin
-                    // Wait for all dot products to complete
-                    if (&dot_valid) begin  // All valid signals high
+                    // FIX: Use .and() method for unpacked array reduction
+                    if (dot_valid.and()) begin  // All valid signals high
                         // Capture results
                         for (int i = 0; i < ROWS; i++) begin
                             vec_out[i] <= dot_results[i];

@@ -24,7 +24,9 @@ module rmsnorm
     
     rms_state_t state;
     logic [5:0] table_idx;
-    fixed_t clamped_mean;
+    fixed_t temp_mean;
+    real mean_val;
+    
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
     fixed_t mean_square;
@@ -87,22 +89,23 @@ module rmsnorm
                 end
                 
                 RMS_SCALE: begin
-                    // Compute mean and lookup inverse sqrt
-                    // mean = sum / VEC_LEN
+                    // Compute mean: sum / VEC_LEN
                     mean_square <= sum_squares >>> $clog2(VEC_LEN);
                     
-                    // Lookup inverse sqrt (with clamping)
+                    // Lookup inverse sqrt based on mean_square value
+                    // Table covers 0.25 to 16.0 in 64 steps
+                    // Step size = (16 - 0.25) / 64 = 0.246 per entry
+                   
+                    temp_mean = sum_squares >>> $clog2(VEC_LEN);
+                    mean_val = fixed_to_float(temp_mean);
                     
+                    // Clamp to table range [0.25, 16.0]
+                    if (mean_val < 0.25) mean_val = 0.25;
+                    if (mean_val > 16.0) mean_val = 16.0;
                     
-                    // Clamp to table range
-                    clamped_mean = mean_square;
-                    if (clamped_mean < float_to_fixed(0.25)) 
-                        clamped_mean = float_to_fixed(0.25);
-                    if (clamped_mean > float_to_fixed(16.0))
-                        clamped_mean = float_to_fixed(16.0);
-                    
-                    // Convert to table index
-                    table_idx = ((clamped_mean - float_to_fixed(0.25)) >>> 6);  // Divide by 0.25
+                    // Map to table index [0, 63]
+                    // index = (value - 0.25) / 0.246
+                    table_idx = $rtoi((mean_val - 0.25) / 0.246);
                     if (table_idx > 63) table_idx = 63;
                     
                     inv_rms = inv_sqrt_table[table_idx];

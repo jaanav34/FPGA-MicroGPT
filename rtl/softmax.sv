@@ -31,6 +31,7 @@ module softmax
     fixed_t scaled [VEC_LEN-1:0];
     fixed_t exponentials [VEC_LEN-1:0];
     fixed_t exp_sum;
+    fixed_t temp_sum;
     int idx;
     
     // Exponential lookup table for exp(x) where x in [-4, 4]
@@ -124,10 +125,12 @@ module softmax
                 end
                 
                 SM_SUM: begin
-                    // Sum all exponentials
+                    // Sum all exponentials using blocking assignment
+                    temp_sum = '0;
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        exp_sum <= fixed_add(exp_sum, exponentials[i]);
+                        temp_sum = fixed_add(temp_sum, exponentials[i]);
                     end
+                    exp_sum <= temp_sum;
                     state <= SM_NORMALIZE;
                 end
                 

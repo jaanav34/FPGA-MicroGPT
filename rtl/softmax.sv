@@ -1,9 +1,10 @@
 // Softmax Module - PRODUCTION READY
 // Computes: softmax(logits) with numerical stability
-module softmax #(
+module softmax 
+    import microgpt_pkg::*;
+#(
     parameter int VEC_LEN = 27
 )
-    import microgpt_pkg::*;
 (
     input  logic        clk,
     input  logic        rst_n,

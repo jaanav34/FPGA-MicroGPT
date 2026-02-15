@@ -1,10 +1,11 @@
 // Matrix-Vector Multiplication - PRODUCTION READY
 // Computes y = M * x where M is (ROWS x COLS) and x is (COLS x 1)
-module matrix_vector_mult #(
+module matrix_vector_mult 
+    import microgpt_pkg::*;
+#(
     parameter int ROWS = 16,
     parameter int COLS = 16
 )
-    import microgpt_pkg::*;
 (
     input  logic        clk,
     input  logic        rst_n,

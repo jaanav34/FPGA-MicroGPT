@@ -1,9 +1,10 @@
 // RMS Normalization - PRODUCTION READY
 // Computes: y = x / sqrt(mean(x^2) + epsilon)
-module rmsnorm #(
+module rmsnorm 
+    import microgpt_pkg::*;
+#(
     parameter int VEC_LEN = 16
 )
-    import microgpt_pkg::*;
 (
     input  logic        clk,
     input  logic        rst_n,

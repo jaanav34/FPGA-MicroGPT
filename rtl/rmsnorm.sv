@@ -23,7 +23,8 @@ module rmsnorm
     } rms_state_t;
     
     rms_state_t state;
-    
+    logic [5:0] table_idx;
+    fixed_t clamped_mean;
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
     fixed_t mean_square;
@@ -91,8 +92,7 @@ module rmsnorm
                     mean_square <= sum_squares >>> $clog2(VEC_LEN);
                     
                     // Lookup inverse sqrt (with clamping)
-                    logic [5:0] table_idx;
-                    fixed_t clamped_mean;
+                    
                     
                     // Clamp to table range
                     clamped_mean = mean_square;

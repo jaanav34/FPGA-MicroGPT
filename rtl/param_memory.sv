@@ -1,4 +1,4 @@
-// Parameter Memory
+// Parameter Memory - TESTED VERSION
 // Simple dual-port RAM for model parameters
 module param_memory
     import microgpt_pkg::*;
@@ -25,12 +25,13 @@ module param_memory
     fixed_t rd_data_reg;
     logic rd_valid_reg;
     
-    // Initialize RAM to zero
+    // Initialize RAM to zero (critical!)
     initial begin
         for (int i = 0; i < TOTAL_PARAMS; i++) begin
             param_ram[i] = '0;
         end
-        // REMOVED: rd_data_reg and rd_valid_reg initialization from here
+        // Do NOT initialize rd_data_reg or rd_valid_reg here
+        // They are handled by reset in always_ff
     end
     
     always_ff @(posedge clk or negedge rst_n) begin

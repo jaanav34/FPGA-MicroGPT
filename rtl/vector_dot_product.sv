@@ -1,9 +1,8 @@
 // Simple Vector Dot Product - TESTED VERSION
-module vector_dot_product 
-    import microgpt_pkg::*;
-#(
+module vector_dot_product #(
     parameter int VEC_LEN = 16
 ) 
+    import microgpt_pkg::*;
 (
     input  logic        clk,
     input  logic        rst_n,
@@ -56,11 +55,14 @@ module vector_dot_product
                 end
                 
                 ACCUMULATE: begin
-                    // Sum all products
-                    accumulator <= '0;
+                    // Sum all products using blocking assignment
+                    // The loop synthesizes to a combinational adder tree
+                    fixed_t temp_sum;
+                    temp_sum = '0;
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        accumulator <= fixed_add(accumulator, products[i]);
+                        temp_sum = fixed_add(temp_sum, products[i]);
                     end
+                    accumulator <= temp_sum;
                     state <= DONE;
                 end
                 

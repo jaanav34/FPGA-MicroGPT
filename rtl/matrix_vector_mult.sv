@@ -1,4 +1,4 @@
-// Matrix-Vector Multiplication - PRODUCTION READY
+// Matrix-Vector Multiplication
 // Computes y = M * x where M is (ROWS x COLS) and x is (COLS x 1)
 module matrix_vector_mult 
     import microgpt_pkg::*;

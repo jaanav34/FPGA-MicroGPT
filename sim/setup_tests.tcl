@@ -41,6 +41,16 @@ proc setup_test {test_name} {
             add_files -fileset sim_1 -norecurse tb/tb_softmax.sv
             set_property top tb_softmax [get_filesets sim_1]
         }
+        "attention" {
+            add_files -fileset sim_1 -norecurse rtl/attention.sv
+            add_files -fileset sim_1 -norecurse tb/tb_attention.sv
+            set_property top tb_attention [get_filesets sim_1]
+        }
+        "mlp" {
+            add_files -fileset sim_1 -norecurse rtl/mlp.sv
+            add_files -fileset sim_1 -norecurse tb/tb_mlp.sv
+            set_property top tb_mlp [get_filesets sim_1]
+        }
         default {
             puts "ERROR: Unknown test '$test_name'"
             puts "Available tests:"

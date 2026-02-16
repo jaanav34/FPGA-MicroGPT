@@ -23,27 +23,26 @@ module rmsnorm
     } rms_state_t;
     
     rms_state_t state;
-    logic [5:0] idx;
     
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
     fixed_t mean_square;
-    fixed_t temp_sum;
-    fixed_t offset;
-    fixed_t temp_mean;
     fixed_t inv_rms;
-    int idx;
+    fixed_t temp_mean;
+    fixed_t temp_sum;
+
+    logic [6:0] idx;
     
     // Precomputed inverse square root table for common values
-    // Covers mean_square from 0.25 to 16.0 in Q8.8
-    fixed_t inv_sqrt_table [0:63];
+    // Covers mean_square from 0.01 to 16.0 in Q8.8
+    fixed_t inv_sqrt_table [0:127];
     
     initial begin
         // Populate inverse square root table
-        // inv_sqrt(x) for x from 0.25 to 16.0
-        for (int i = 0; i < 64; i++) begin
+        // inv_sqrt(x) for x from 0.01 to 16.0 (expanded range)
+        for (int i = 0; i < 128; i++) begin
             real x, inv_s;
-            x = 0.25 + (i * 0.25);  // Range: 0.25 to 16.0
+            x = 0.01 + (i * 0.125);  // Range: 0.01 to ~16.0
             inv_s = 1.0 / $sqrt(x + 0.00001);  // Add epsilon
             inv_sqrt_table[i] = float_to_fixed(inv_s);
         end
@@ -99,20 +98,19 @@ module rmsnorm
                     // Simple lookup: Use mean_square directly as index
                     // Clamp and scale to table range
                     
-                    // Map mean_square (Q8.8) to table index [0, 63]
-                    // Table covers 0.25 to 16.0
-                    // Simply use upper bits of mean_square for indexing
-                    if (temp_mean < float_to_fixed(0.25)) begin
+                    // Map mean_square (Q8.8) to table index [0, 127]
+                    // Table covers 0.01 to 16.0 (step size 0.125)
+                    if (temp_mean < float_to_fixed(0.01)) begin
                         idx = 0;
                     end else if (temp_mean > float_to_fixed(16.0)) begin
-                        idx = 63;
+                        idx = 127;
                     end else begin
-                        // Scale: (value - 0.25) * 64 / (16 - 0.25)
-                        // = (value - 0.25) * 4.06
-                        // Approximate: just use value * 4
-                        offset = temp_mean - float_to_fixed(0.25);
-                        idx = (offset >>> 6);  // Divide by 64 (shift right 6)
-                        if (idx > 63) idx = 63;
+                        // Map: (value - 0.01) / 0.125
+                        // Approximate with bit shifts
+                        fixed_t offset;
+                        offset = temp_mean - float_to_fixed(0.01);
+                        idx = (offset >>> 5);  // Divide by 32 (approx 0.125 in Q8.8)
+                        if (idx > 127) idx = 127;
                     end
                     
                     inv_rms = inv_sqrt_table[idx];

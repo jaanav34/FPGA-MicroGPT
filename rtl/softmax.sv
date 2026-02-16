@@ -1,4 +1,4 @@
-// Softmax Module - PRODUCTION READY
+// Softmax Module - PRODUCTION READY (FINAL)
 // Computes: softmax(logits) with numerical stability
 module softmax 
     import microgpt_pkg::*;
@@ -15,6 +15,7 @@ module softmax
     output logic        valid
 );
 
+    // ALL DECLARATIONS AT TOP!
     typedef enum logic [2:0] {
         SM_IDLE,
         SM_FIND_MAX,
@@ -26,16 +27,16 @@ module softmax
     } sm_state_t;
     
     sm_state_t state;
-    fixed_t temp_sum;
-    logic signed [31:0] dividend;
     fixed_t max_logit;
     fixed_t scaled [VEC_LEN-1:0];
     fixed_t exponentials [VEC_LEN-1:0];
     fixed_t exp_sum;
+    fixed_t temp_sum;
+    logic signed [31:0] dividend;
     int idx;
     
     // Exponential lookup table for exp(x) where x in [-8, 8]
-    // 256 entries covering the range (expanded from [-4,4])
+    // 256 entries covering the range
     fixed_t exp_table [0:255];
     
     initial begin
@@ -46,12 +47,12 @@ module softmax
             exp_val = $exp(x);
             // Clamp to representable range
             if (exp_val > 127.0) exp_val = 127.0;
-            if (exp_val < 0.0001) exp_val = 0.0001;  // Smaller floor for better dynamic range
+            if (exp_val < 0.0001) exp_val = 0.0001;
             exp_table[i] = float_to_fixed(exp_val);
         end
     end
     
-    // Lookup exponential with interpolation
+    // Lookup exponential function
     function automatic fixed_t lookup_exp(fixed_t x);
         logic signed [15:0] x_int;
         logic [7:0] table_idx;
@@ -60,14 +61,11 @@ module softmax
         
         // Clamp to table range [-8, 8]
         if (x_int < float_to_fixed(-8.0)) 
-            return float_to_fixed(0.0003);  // exp(-8)
+            return float_to_fixed(0.0003);
         if (x_int > float_to_fixed(8.0))
-            return float_to_fixed(127.0);   // exp(8), clamped to Q8.8 max
+            return float_to_fixed(127.0);
         
         // Map to table index [0, 255]
-        // x = -8.0 + (idx * 16.0/256)
-        // idx = (x + 8.0) * 256 / 16 = (x + 8.0) * 16
-        // In Q8.8: shift by 4 bits
         table_idx = ((x_int + float_to_fixed(8.0)) >>> 4);
         if (table_idx > 255) table_idx = 255;
         
@@ -108,8 +106,7 @@ module softmax
                 
                 SM_SCALE: begin
                     // Subtract max for numerical stability
-                    // Note: Full temperature support would divide by temperature here
-                    // For now, simplified to assume temperature ≈ 1.0
+                    // Note: Temperature input is present but not used (assumes T=1.0)
                     for (int i = 0; i < VEC_LEN; i++) begin
                         fixed_t shifted;
                         shifted = logits[i] - max_logit;

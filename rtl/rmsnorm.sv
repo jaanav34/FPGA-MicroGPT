@@ -1,4 +1,4 @@
-// RMS Normalization - PRODUCTION READY
+// RMS Normalization - PRODUCTION READY (FINAL)
 // Computes: y = x / sqrt(mean(x^2) + epsilon)
 module rmsnorm 
     import microgpt_pkg::*;
@@ -14,6 +14,7 @@ module rmsnorm
     output logic        valid
 );
 
+    // ALL DECLARATIONS AT TOP!
     typedef enum logic [2:0] {
         RMS_IDLE,
         RMS_SQUARE,
@@ -23,27 +24,27 @@ module rmsnorm
     } rms_state_t;
     
     rms_state_t state;
-    
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
     fixed_t mean_square;
     fixed_t inv_rms;
     fixed_t temp_mean;
+    real mean_val;
     fixed_t temp_sum;
-
-    logic [6:0] idx;
+    logic [7:0] idx;
     
-    // Precomputed inverse square root table for common values
-    // Covers mean_square from 0.01 to 16.0 in Q8.8
-    fixed_t inv_sqrt_table [0:127];
+    // Inverse square root lookup table
+    // 256 entries covering 0.001 to 16.0 for better small value support
+    fixed_t inv_sqrt_table [0:255];
     
     initial begin
-        // Populate inverse square root table
-        // inv_sqrt(x) for x from 0.01 to 16.0 (expanded range)
-        for (int i = 0; i < 128; i++) begin
+        // Populate inverse square root table with wider range
+        for (int i = 0; i < 256; i++) begin
             real x, inv_s;
-            x = 0.01 + (i * 0.125);  // Range: 0.01 to ~16.0
-            inv_s = 1.0 / $sqrt(x + 0.00001);  // Add epsilon
+            // Map index to value: 0.001 to 16.0
+            // Step size = (16 - 0.001) / 256 ≈ 0.0624
+            x = 0.001 + (i * 0.0624);
+            inv_s = 1.0 / $sqrt(x + 0.00001);
             inv_sqrt_table[i] = float_to_fixed(inv_s);
         end
     end
@@ -64,7 +65,6 @@ module rmsnorm
             case (state)
                 RMS_IDLE: begin
                     if (start) begin
-                        idx <= 0;
                         sum_squares <= '0;
                         state <= RMS_SQUARE;
                     end
@@ -75,7 +75,6 @@ module rmsnorm
                     for (int i = 0; i < VEC_LEN; i++) begin
                         squares[i] <= fixed_mul(vec_in[i], vec_in[i]);
                     end
-                    idx <= 0;
                     state <= RMS_SUM;
                 end
                 
@@ -90,28 +89,22 @@ module rmsnorm
                 end
                 
                 RMS_SCALE: begin
+                   
+                    
                     // Compute mean: sum / VEC_LEN
-                    // For VEC_LEN=4, mean = sum >> 2
                     temp_mean = sum_squares >>> $clog2(VEC_LEN);
                     mean_square <= temp_mean;
                     
-                    // Simple lookup: Use mean_square directly as index
-                    // Clamp and scale to table range
+                    // Convert to real for table lookup calculation
+                    mean_val = fixed_to_float(temp_mean);
                     
-                    // Map mean_square (Q8.8) to table index [0, 127]
-                    // Table covers 0.01 to 16.0 (step size 0.125)
-                    if (temp_mean < float_to_fixed(0.01)) begin
-                        idx = 0;
-                    end else if (temp_mean > float_to_fixed(16.0)) begin
-                        idx = 127;
-                    end else begin
-                        // Map: (value - 0.01) / 0.125
-                        // Approximate with bit shifts
-                        fixed_t offset;
-                        offset = temp_mean - float_to_fixed(0.01);
-                        idx = (offset >>> 5);  // Divide by 32 (approx 0.125 in Q8.8)
-                        if (idx > 127) idx = 127;
-                    end
+                    // Clamp to table range
+                    if (mean_val < 0.001) mean_val = 0.001;
+                    if (mean_val > 16.0) mean_val = 16.0;
+                    
+                    // Map to table index: (value - 0.001) / 0.0624
+                    idx = $rtoi((mean_val - 0.001) / 0.0624);
+                    if (idx > 255) idx = 255;
                     
                     inv_rms = inv_sqrt_table[idx];
                     

@@ -23,13 +23,13 @@ module rmsnorm
     } rms_state_t;
     
     rms_state_t state;
-    logic [5:0] table_idx;
-    fixed_t temp_mean;
-    real mean_val;
     
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
     fixed_t mean_square;
+    fixed_t temp_sum;
+    fixed_t offset;
+    fixed_t temp_mean;
     fixed_t inv_rms;
     int idx;
     
@@ -80,35 +80,42 @@ module rmsnorm
                 end
                 
                 RMS_SUM: begin
-                    // Sum all squares
-                    sum_squares <= '0;
+                    // Sum all squares using blocking assignment
+                    temp_sum = '0;
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        sum_squares <= fixed_add(sum_squares, squares[i]);
+                        temp_sum = fixed_add(temp_sum, squares[i]);
                     end
+                    sum_squares <= temp_sum;
                     state <= RMS_SCALE;
                 end
                 
                 RMS_SCALE: begin
                     // Compute mean: sum / VEC_LEN
-                    mean_square <= sum_squares >>> $clog2(VEC_LEN);
-                    
-                    // Lookup inverse sqrt based on mean_square value
-                    // Table covers 0.25 to 16.0 in 64 steps
-                    // Step size = (16 - 0.25) / 64 = 0.246 per entry
-                   
+                    // For VEC_LEN=4, mean = sum >> 2
                     temp_mean = sum_squares >>> $clog2(VEC_LEN);
-                    mean_val = fixed_to_float(temp_mean);
+                    mean_square <= temp_mean;
                     
-                    // Clamp to table range [0.25, 16.0]
-                    if (mean_val < 0.25) mean_val = 0.25;
-                    if (mean_val > 16.0) mean_val = 16.0;
+                    // Simple lookup: Use mean_square directly as index
+                    // Clamp and scale to table range
+                    logic [5:0] idx;
                     
-                    // Map to table index [0, 63]
-                    // index = (value - 0.25) / 0.246
-                    table_idx = $rtoi((mean_val - 0.25) / 0.246);
-                    if (table_idx > 63) table_idx = 63;
+                    // Map mean_square (Q8.8) to table index [0, 63]
+                    // Table covers 0.25 to 16.0
+                    // Simply use upper bits of mean_square for indexing
+                    if (temp_mean < float_to_fixed(0.25)) begin
+                        idx = 0;
+                    end else if (temp_mean > float_to_fixed(16.0)) begin
+                        idx = 63;
+                    end else begin
+                        // Scale: (value - 0.25) * 64 / (16 - 0.25)
+                        // = (value - 0.25) * 4.06
+                        // Approximate: just use value * 4
+                        offset = temp_mean - float_to_fixed(0.25);
+                        idx = (offset >>> 6);  // Divide by 64 (shift right 6)
+                        if (idx > 63) idx = 63;
+                    end
                     
-                    inv_rms = inv_sqrt_table[table_idx];
+                    inv_rms = inv_sqrt_table[idx];
                     
                     // Apply scaling to all elements
                     for (int i = 0; i < VEC_LEN; i++) begin

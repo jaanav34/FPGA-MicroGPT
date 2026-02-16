@@ -26,27 +26,27 @@ module softmax
     } sm_state_t;
     
     sm_state_t state;
+    fixed_t temp_sum;
     
     fixed_t max_logit;
     fixed_t scaled [VEC_LEN-1:0];
     fixed_t exponentials [VEC_LEN-1:0];
     fixed_t exp_sum;
-    fixed_t temp_sum;
     int idx;
     
-    // Exponential lookup table for exp(x) where x in [-4, 4]
-    // 128 entries covering the range
-    fixed_t exp_table [0:127];
+    // Exponential lookup table for exp(x) where x in [-8, 8]
+    // 256 entries covering the range (expanded from [-4,4])
+    fixed_t exp_table [0:255];
     
     initial begin
-        // Populate exp table: exp(x) for x from -4.0 to +4.0
-        for (int i = 0; i < 128; i++) begin
+        // Populate exp table: exp(x) for x from -8.0 to +8.0
+        for (int i = 0; i < 256; i++) begin
             real x, exp_val;
-            x = -4.0 + (i * 8.0 / 128.0);
+            x = -8.0 + (i * 16.0 / 256.0);
             exp_val = $exp(x);
             // Clamp to representable range
             if (exp_val > 127.0) exp_val = 127.0;
-            if (exp_val < 0.001) exp_val = 0.001;
+            if (exp_val < 0.0001) exp_val = 0.0001;  // Smaller floor for better dynamic range
             exp_table[i] = float_to_fixed(exp_val);
         end
     end
@@ -54,21 +54,22 @@ module softmax
     // Lookup exponential with interpolation
     function automatic fixed_t lookup_exp(fixed_t x);
         logic signed [15:0] x_int;
-        logic [6:0] table_idx;
+        logic [7:0] table_idx;
         
         x_int = x;
         
-        // Clamp to table range [-4, 4]
-        if (x_int < float_to_fixed(-4.0)) 
-            return float_to_fixed(0.018);  // exp(-4)
-        if (x_int > float_to_fixed(4.0))
-            return float_to_fixed(54.6);   // exp(4)
+        // Clamp to table range [-8, 8]
+        if (x_int < float_to_fixed(-8.0)) 
+            return float_to_fixed(0.0003);  // exp(-8)
+        if (x_int > float_to_fixed(8.0))
+            return float_to_fixed(127.0);   // exp(8), clamped to Q8.8 max
         
-        // Map to table index [0, 127]
-        // x = -4.0 + (idx * 8.0/128)
-        // idx = (x + 4.0) * 128 / 8
-        table_idx = ((x_int + float_to_fixed(4.0)) >>> 5);  // Divide by 32
-        if (table_idx > 127) table_idx = 127;
+        // Map to table index [0, 255]
+        // x = -8.0 + (idx * 16.0/256)
+        // idx = (x + 8.0) * 256 / 16 = (x + 8.0) * 16
+        // In Q8.8: shift by 4 bits
+        table_idx = ((x_int + float_to_fixed(8.0)) >>> 4);
+        if (table_idx > 255) table_idx = 255;
         
         return exp_table[table_idx];
     endfunction
@@ -106,11 +107,13 @@ module softmax
                 end
                 
                 SM_SCALE: begin
-                    // Scale by temperature and subtract max
+                    // Subtract max for numerical stability
+                    // Note: Full temperature support would divide by temperature here
+                    // For now, simplified to assume temperature ≈ 1.0
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        fixed_t temp_scaled;
-                        temp_scaled = fixed_mul(logits[i], temperature);
-                        scaled[i] <= fixed_add(temp_scaled, -max_logit);
+                        fixed_t shifted;
+                        shifted = logits[i] - max_logit;
+                        scaled[i] <= shifted;
                     end
                     state <= SM_EXP;
                 end

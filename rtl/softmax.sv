@@ -27,7 +27,7 @@ module softmax
     
     sm_state_t state;
     fixed_t temp_sum;
-    
+    logic signed [31:0] dividend;
     fixed_t max_logit;
     fixed_t scaled [VEC_LEN-1:0];
     fixed_t exponentials [VEC_LEN-1:0];
@@ -140,7 +140,6 @@ module softmax
                 SM_NORMALIZE: begin
                     // Normalize: prob[i] = exp[i] / sum
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        logic signed [31:0] dividend;
                         dividend = exponentials[i] <<< FRAC_BITS;
                         probs[i] <= fixed_t'(dividend / exp_sum);
                     end

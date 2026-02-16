@@ -23,6 +23,7 @@ module rmsnorm
     } rms_state_t;
     
     rms_state_t state;
+    logic [5:0] idx;
     
     fixed_t squares [VEC_LEN-1:0];
     fixed_t sum_squares;
@@ -97,7 +98,6 @@ module rmsnorm
                     
                     // Simple lookup: Use mean_square directly as index
                     // Clamp and scale to table range
-                    logic [5:0] idx;
                     
                     // Map mean_square (Q8.8) to table index [0, 63]
                     // Table covers 0.25 to 16.0

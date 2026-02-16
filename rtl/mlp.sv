@@ -70,9 +70,11 @@ module mlp
     logic  fc1_start;
     logic  fc1_valid;
     fixed_t fc1_in [N_EMBD-1:0];
-    fixed_t fc1_mat [(4*N_EMBD)*N_EMBD-1:0];
-    fixed_t fc1_out [HIDDEN_DIM-1:0];
-    integer i;
+    fixed_t fc1_mat [HIDDEN_DIM-1:0][N_EMBD-1:0];      // Changed to 2D
+    fixed_t fc2_mat [N_EMBD-1:0][HIDDEN_DIM-1:0];      // Changed to 2D
+    fixed_t fc1_out [HIDDEN_DIM-1:0]; // Intermediate result from first layer
+    fixed_t fc2_out [N_EMBD-1:0];     // Intermediate result from second layer
+    integer i, r, c;
     
     matrix_vector_mult #(
         .ROWS(HIDDEN_DIM),
@@ -91,8 +93,6 @@ module mlp
     logic  fc2_start;
     logic  fc2_valid;
     fixed_t fc2_in [HIDDEN_DIM-1:0];
-    fixed_t fc2_mat [N_EMBD*HIDDEN_DIM-1:0];
-    fixed_t fc2_out [N_EMBD-1:0];
     
     matrix_vector_mult #(
         .ROWS(N_EMBD),
@@ -126,12 +126,16 @@ module mlp
                 fc2_in[i] <= '0;
             end
             
-            for (i = 0; i < (HIDDEN_DIM)*N_EMBD; i++) begin
-                fc1_mat[i] <= '0;
+            for (r = 0; r < HIDDEN_DIM; r++) begin
+                for (c = 0; c < N_EMBD; c++) begin
+                    fc1_mat[r][c] <= '0;
+                end
             end
             
-            for (i = 0; i < N_EMBD*HIDDEN_DIM; i++) begin
-                fc2_mat[i] <= '0;
+            for (r = 0; r < N_EMBD; r++) begin
+                for (c = 0; c < HIDDEN_DIM; c++) begin
+                    fc2_mat[r][c] <= '0;
+                end
             end
             
         end else begin
@@ -149,15 +153,14 @@ module mlp
                 
                 // ---------------------------------------------------------------
                 MLP_FC1: begin
-                    // Start first linear layer
                     if (!fc1_start && !fc1_valid) begin
-                        // Load input and weights
-                        for (i = 0; i < N_EMBD; i++) begin
-                            fc1_in[i] <= x_in[i];
-                        end
+                        for (i = 0; i < N_EMBD; i++) fc1_in[i] <= x_in[i];
                         
-                        for (i = 0; i < (HIDDEN_DIM)*N_EMBD; i++) begin
-                            fc1_mat[i] <= fc1_weights[i];
+                        // Map flattened fc1_weights to 2D fc1_mat
+                        for (r = 0; r < HIDDEN_DIM; r++) begin
+                            for (c = 0; c < N_EMBD; c++) begin
+                                fc1_mat[r][c] <= fc1_weights[r * N_EMBD + c];
+                            end
                         end
                         
                         fc1_start <= 1;
@@ -190,15 +193,14 @@ module mlp
                 
                 // ---------------------------------------------------------------
                 MLP_FC2: begin
-                    // Start second linear layer
                     if (!fc2_start && !fc2_valid) begin
-                        // Load hidden activations and weights
-                        for (i = 0; i < HIDDEN_DIM; i++) begin
-                            fc2_in[i] <= hidden[i];
-                        end
+                        for (i = 0; i < HIDDEN_DIM; i++) fc2_in[i] <= hidden[i];
                         
-                        for (i = 0; i < N_EMBD*HIDDEN_DIM; i++) begin
-                            fc2_mat[i] <= fc2_weights[i];
+                        // Map flattened fc2_weights to 2D fc2_mat
+                        for (r = 0; r < N_EMBD; r++) begin
+                            for (c = 0; c < HIDDEN_DIM; c++) begin
+                                fc2_mat[r][c] <= fc2_weights[r * HIDDEN_DIM + c];
+                            end
                         end
                         
                         fc2_start <= 1;

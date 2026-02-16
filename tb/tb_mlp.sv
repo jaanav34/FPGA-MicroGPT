@@ -49,8 +49,8 @@ module tb_mlp;
         forever #(CLK_PERIOD/2) clk = ~clk;
     end
     
-    // Helper functions
-    function void reset_dut();
+    // Helper tasks (Changed from functions to tasks to allow time-controlled statements)
+    task reset_dut();
         rst_n = 0;
         start = 0;
         for (int i = 0; i < N_EMBD; i++) begin
@@ -65,9 +65,9 @@ module tb_mlp;
         repeat(5) @(posedge clk);
         rst_n = 1;
         repeat(2) @(posedge clk);
-    endfunction
+    endtask
     
-    function void wait_for_valid();
+    task wait_for_valid();
         fork
             begin
                 wait(valid);
@@ -80,8 +80,9 @@ module tb_mlp;
             end
         join_any
         disable fork;
-    endfunction
+    endtask
     
+    // Display output (Can remain a function as it has no time-controlled statements)
     function void display_output(string msg);
         $display("%s", msg);
         $display("  Output vector:");
@@ -104,21 +105,15 @@ module tb_mlp;
     endfunction
     
     function void init_identity_weights();
-        // FC1: Identity-like weights (diagonal pattern)
         for (int i = 0; i < HIDDEN_DIM*N_EMBD; i++) begin
             fc1_weights[i] = '0;
         end
-        
-        // Set some diagonal elements to 1.0
         for (int i = 0; i < N_EMBD; i++) begin
             fc1_weights[i * N_EMBD + i] = float_to_fixed(1.0);
         end
-        
-        // FC2: Identity-like weights
         for (int i = 0; i < N_EMBD*HIDDEN_DIM; i++) begin
             fc2_weights[i] = '0;
         end
-        
         for (int i = 0; i < N_EMBD; i++) begin
             fc2_weights[i * HIDDEN_DIM + i] = float_to_fixed(1.0);
         end

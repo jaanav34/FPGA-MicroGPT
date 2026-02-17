@@ -26,7 +26,8 @@ module tb_attention_head;
     fixed_t      v_in [HEAD_DIM-1:0];
     fixed_t      head_out [HEAD_DIM-1:0];
     logic        valid;
-    
+    logic test_pass = 1;
+
     // Test control
     int test_num;
     int pass_count;
@@ -57,7 +58,7 @@ module tb_attention_head;
     end
     
     // Helper functions
-    function void reset_dut();
+    task reset_dut();
         rst_n = 0;
         start = 0;
         clear_cache = 0;
@@ -70,9 +71,9 @@ module tb_attention_head;
         repeat(5) @(posedge clk);
         rst_n = 1;
         repeat(2) @(posedge clk);
-    endfunction
+    endtask
     
-    function void wait_for_valid();
+    task wait_for_valid();
         fork
             begin
                 wait(valid);
@@ -85,7 +86,7 @@ module tb_attention_head;
             end
         join_any
         disable fork;
-    endfunction
+    endtask
     
     function void display_output(string msg);
         $display("%s", msg);
@@ -114,6 +115,9 @@ module tb_attention_head;
     
     // Test 1: Single position attention
     task test_single_position();
+        real expected;
+        real actual;
+        real error;
         $display("\n=== Test 1: Single Position Attention ===");
         test_num = 1;
         
@@ -145,11 +149,10 @@ module tb_attention_head;
         
         // With only one position, attention weight should be 1.0
         // Output should equal V
-        logic test_pass = 1;
         for (int i = 0; i < HEAD_DIM; i++) begin
-            real expected = 2.0 - (i * 0.5);
-            real actual = fixed_to_float(head_out[i]);
-            real error = actual - expected;
+            expected = 2.0 - (i * 0.5);
+            actual = fixed_to_float(head_out[i]);
+            error = actual - expected;
             if (error < 0) error = -error;
             
             if (error > 0.3) begin  // Allow some tolerance due to fixed-point
@@ -167,7 +170,8 @@ module tb_attention_head;
             fail_count++;
         end
     endtask
-    
+    // In Test 1, after wait_for_valid():
+
     // Test 2: Two position attention
     task test_two_positions();
         $display("\n=== Test 2: Two Position Attention ===");

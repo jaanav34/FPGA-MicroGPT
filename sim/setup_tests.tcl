@@ -42,9 +42,9 @@ proc setup_test {test_name} {
             set_property top tb_softmax [get_filesets sim_1]
         }
         "attention" {
-            add_files -fileset sim_1 -norecurse rtl/attention.sv
-            add_files -fileset sim_1 -norecurse tb/tb_attention.sv
-            set_property top tb_attention [get_filesets sim_1]
+            add_files -fileset sim_1 -norecurse rtl/attention_head.sv
+            add_files -fileset sim_1 -norecurse tb/tb_attention_head.sv
+            set_property top tb_attention_head [get_filesets sim_1]
         }
         "mlp" {
             add_files -fileset sim_1 -norecurse rtl/mlp.sv

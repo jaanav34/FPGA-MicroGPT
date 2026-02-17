@@ -46,6 +46,11 @@ proc setup_test {test_name} {
             add_files -fileset sim_1 -norecurse tb/tb_attention_head.sv
             set_property top tb_attention_head [get_filesets sim_1]
         }
+        "multi" {
+            add_files -fileset sim_1 -norecurse rtl/multi_head_attention.sv
+            add_files -fileset sim_1 -norecurse tb/tb_multi_head_attention.sv
+            set_property top tb_multi_head_attention [get_filesets sim_1]
+        }
         "mlp" {
             add_files -fileset sim_1 -norecurse rtl/mlp.sv
             add_files -fileset sim_1 -norecurse tb/tb_mlp.sv
@@ -83,6 +88,9 @@ puts "  LEVEL 2 (Math Operations):"
 puts "    matrix_vector - Matrix-vector multiplication"
 puts "    rmsnorm       - RMS normalization"
 puts "    softmax       - Softmax with temperature"
+puts "    attention      - Single-head attention mechanism"
+puts "    multi         - Multi-head attention"
+puts "    mlp           - Multi-layer perceptron"
 puts ""
 puts "Example: setup_test matrix_vector"
 puts "         launch_simulation"

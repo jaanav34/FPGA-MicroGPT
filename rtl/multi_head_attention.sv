@@ -81,7 +81,7 @@ module multi_head_attention
     logic       mv_start;
     logic       mv_valid;
     fixed_t     mv_vec_in [N_EMBD-1:0];
-    fixed_t     mv_mat_in [N_EMBD*N_EMBD-1:0];
+    fixed_t     mv_mat_in [N_EMBD-1:0][N_EMBD-1:0]; // 2D matrix instead of 1D
     fixed_t     mv_result [N_EMBD-1:0];
     logic [1:0] mv_select;  // 0=Q, 1=K, 2=V, 3=Out
 
@@ -158,8 +158,10 @@ module multi_head_attention
                 mv_vec_in[i] <= '0;
             end
             
-            for (i = 0; i < N_EMBD*N_EMBD; i++) begin
-                mv_mat_in[i] <= '0;
+            for (int r = 0; r < N_EMBD; r++) begin
+                for (int c = 0; c < N_EMBD; c++) begin
+                    mv_mat_in[r][c] <= '0;
+                end
             end
             
             for (i = 0; i < HEAD_DIM; i++) begin
@@ -196,21 +198,27 @@ module multi_head_attention
                             mv_vec_in[i] <= x_in[i];
                         end
                         
-                        // Select weight matrix
+                        // Select weight matrix and map to 2D buffer
                         case (proj_count)
                             0: begin  // Q projection
-                                for (i = 0; i < N_EMBD*N_EMBD; i++) begin
-                                    mv_mat_in[i] <= wq[i];
+                                for (int r = 0; r < N_EMBD; r++) begin
+                                    for (int c = 0; c < N_EMBD; c++) begin
+                                        mv_mat_in[r][c] <= wq[r * N_EMBD + c];
+                                    end
                                 end
                             end
                             1: begin  // K projection
-                                for (i = 0; i < N_EMBD*N_EMBD; i++) begin
-                                    mv_mat_in[i] <= wk[i];
+                                for (int r = 0; r < N_EMBD; r++) begin
+                                    for (int c = 0; c < N_EMBD; c++) begin
+                                        mv_mat_in[r][c] <= wk[r * N_EMBD + c];
+                                    end
                                 end
                             end
                             2: begin  // V projection
-                                for (i = 0; i < N_EMBD*N_EMBD; i++) begin
-                                    mv_mat_in[i] <= wv[i];
+                                for (int r = 0; r < N_EMBD; r++) begin
+                                    for (int c = 0; c < N_EMBD; c++) begin
+                                        mv_mat_in[r][c] <= wv[r * N_EMBD + c];
+                                    end
                                 end
                             end
                         endcase
@@ -297,8 +305,11 @@ module multi_head_attention
                             mv_vec_in[i] <= concat[i];
                         end
                         
-                        for (i = 0; i < N_EMBD*N_EMBD; i++) begin
-                            mv_mat_in[i] <= wo[i];
+                        // Map flattened output weights to 2D buffer
+                        for (int r = 0; r < N_EMBD; r++) begin
+                            for (int c = 0; c < N_EMBD; c++) begin
+                                mv_mat_in[r][c] <= wo[r * N_EMBD + c];
+                            end
                         end
                         
                         mv_start <= 1;

@@ -1,6 +1,6 @@
 *.log
 *.jou
-MicroGPT/
+MicroGPT2/
 *.str
 test_out.txt
 .Xil/ 

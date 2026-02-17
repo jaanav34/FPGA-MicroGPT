@@ -61,6 +61,11 @@ proc setup_test {test_name} {
             add_files -fileset sim_1 -norecurse tb/tb_transformer_layer.sv
             set_property top tb_transformer_layer [get_filesets sim_1]
         }
+        "microgpt_top" {
+            add_files -fileset sim_1 -norecurse rtl/microgpt_top.sv
+            add_files -fileset sim_1 -norecurse tb/tb_microgpt_top.sv
+            set_property top tb_microgpt_top [get_filesets sim_1]
+        }
         default {
             puts "ERROR: Unknown test '$test_name'"
             puts "Available tests:"

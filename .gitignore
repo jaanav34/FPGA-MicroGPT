@@ -4,3 +4,4 @@ MicroGPT/
 *.str
 test_out.txt
 .Xil/ 
+microgpt_env/

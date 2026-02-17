@@ -137,6 +137,18 @@ module tb_attention_head;
             k_in[i] = float_to_fixed(1.0 / (1 << i));
             v_in[i] = float_to_fixed(2.0 - (i * 0.5));
         end
+
+        // After setting q_in, k_in, v_in but before start=1
+        $display("DEBUG Test 1 Inputs:");
+        $display("  Q: [%.3f, %.3f, %.3f, %.3f]", 
+            fixed_to_float(q_in[0]), fixed_to_float(q_in[1]), 
+            fixed_to_float(q_in[2]), fixed_to_float(q_in[3]));
+        $display("  K: [%.3f, %.3f, %.3f, %.3f]", 
+            fixed_to_float(k_in[0]), fixed_to_float(k_in[1]), 
+            fixed_to_float(k_in[2]), fixed_to_float(k_in[3]));
+        $display("  V: [%.3f, %.3f, %.3f, %.3f]", 
+            fixed_to_float(v_in[0]), fixed_to_float(v_in[1]), 
+            fixed_to_float(v_in[2]), fixed_to_float(v_in[3]));
         
         pos = 0;
         start = 1;
@@ -161,6 +173,17 @@ module tb_attention_head;
                 test_pass = 0;
             end
         end
+
+        // After wait_for_valid(), add:
+        $display("DEBUG: V cache at pos 0:");
+        $display("  [%.3f, %.3f, %.3f, %.3f]",
+            fixed_to_float(dut.v_cache[0][0]), fixed_to_float(dut.v_cache[0][1]),
+            fixed_to_float(dut.v_cache[0][2]), fixed_to_float(dut.v_cache[0][3]));
+        $display("DEBUG: Attention weight[0] = %0d (%.6f)", 
+            dut.attn_weights[0], fixed_to_float(dut.attn_weights[0]));
+        $display("DEBUG: Accumulator before final shift:");
+        $display("  [%0d, %0d, %0d, %0d]",
+            dut.accum[0], dut.accum[1], dut.accum[2], dut.accum[3]);
         
         if (test_pass) begin
             $display("✓ Test 1 PASSED");
@@ -268,22 +291,21 @@ module tb_attention_head;
         pass_count++;
     endtask
     
-    // Test 4: Attention focus test
+    // Test 4: Attention focus test (IMPROVED)
     task test_attention_focus();
         $display("\n=== Test 4: Attention Focus Test ===");
         test_num = 4;
         
-        // Clear cache
         @(posedge clk);
         clear_cache = 1;
         @(posedge clk);
         clear_cache = 0;
         @(posedge clk);
         
-        // Position 0: K=[0,0,0,0], V=[10,10,10,10]
+        // Position 0: K=[1,1,1,1], V=[10,10,10,10]
         for (int i = 0; i < HEAD_DIM; i++) begin
-            q_in[i] = float_to_fixed(0.0);
-            k_in[i] = float_to_fixed(0.0);
+            q_in[i] = float_to_fixed(5.0);  // Query doesn't match this well
+            k_in[i] = float_to_fixed(1.0);
             v_in[i] = float_to_fixed(10.0);
         end
         pos = 0;
@@ -293,10 +315,9 @@ module tb_attention_head;
         wait_for_valid();
         @(posedge clk);
         
-        // Position 1: K=[5,5,5,5] (high similarity to upcoming query)
-        //             V=[1,1,1,1]
+        // Position 1: K=[5,5,5,5] (matches query!), V=[1,1,1,1]
         for (int i = 0; i < HEAD_DIM; i++) begin
-            q_in[i] = float_to_fixed(5.0);
+            q_in[i] = float_to_fixed(5.0);  // Query matches this position
             k_in[i] = float_to_fixed(5.0);
             v_in[i] = float_to_fixed(1.0);
         end
@@ -308,10 +329,13 @@ module tb_attention_head;
         
         display_output("Attention focus output:");
         
-        // Q·K[0] ≈ 0, Q·K[1] ≈ 100 (high)
-        // Should attend mostly to position 1, output ≈ [1,1,1,1]
-        if (check_output_range(0.5, 5.0)) begin
-            $display("✓ Test 4 PASSED - attention focused correctly");
+        // Q·K[0] = 5×1 × 4 = 20 (scaled)
+        // Q·K[1] = 5×5 × 4 = 100 (scaled)
+        // After softmax, position 1 should get MUCH higher weight
+        // Output should be closer to V[1]=[1,1,1,1] than V[0]=[10,10,10,10]
+        // Expected: somewhere between 1.0 and 4.0
+        if (check_output_range(0.5, 4.0)) begin
+            $display("✓ Test 4 PASSED - attention focused on higher-scoring position");
             pass_count++;
         end else begin
             $display("✗ Test 4 FAILED - attention focus incorrect");
@@ -444,6 +468,379 @@ module tb_attention_head;
             fail_count++;
         end
     endtask
+
+    // ===========================================================================
+    // Additional Attention Head Tests - Stress Testing
+    // ===========================================================================
+    // These tests verify edge cases and attention focusing behavior
+    // Add these tasks to your tb_attention_head.sv file
+    // ===========================================================================
+
+    // Test 8: Strong Attention Focus (one position dominates)
+    task test_strong_attention_focus();
+        real avg_output;
+        $display("\n=== Test 8: Strong Attention Focus ===");
+        test_num = 8;
+        
+        @(posedge clk);
+        clear_cache = 1;
+        @(posedge clk);
+        clear_cache = 0;
+        @(posedge clk);
+        
+        // Position 0: K=[0.1,0.1,0.1,0.1], V=[100,100,100,100]
+        // Very low key values - won't match query
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(10.0);
+            k_in[i] = float_to_fixed(0.1);
+            v_in[i] = float_to_fixed(100.0);
+        end
+        pos = 0;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        @(posedge clk);
+        
+        // Position 1: K=[10,10,10,10], V=[1,1,1,1]
+        // Perfect match with query!
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(10.0);
+            k_in[i] = float_to_fixed(10.0);
+            v_in[i] = float_to_fixed(1.0);
+        end
+        pos = 1;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        
+        display_output("Strong attention focus output:");
+        
+        // Q·K[0] = 10×0.1×4 = 4.0
+        // Q·K[1] = 10×10×4 = 400.0
+        // After scaling and softmax, position 1 should get ~99.9% attention
+        // Output should be very close to V[1]=[1,1,1,1]
+        
+        avg_output = 0.0;
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            avg_output += fixed_to_float(head_out[i]);
+        end
+        avg_output = avg_output / HEAD_DIM;
+        
+        $display("Average output: %.3f", avg_output);
+        $display("Expected: ~1.0 (strongly focused on position 1)");
+        
+        if (avg_output > 0.8 && avg_output < 2.0) begin
+            $display("✓ Test 8 PASSED - strong attention focus works");
+            pass_count++;
+        end else begin
+            $display("✗ Test 8 FAILED - attention not focusing correctly");
+            $display("  Output should be close to 1.0, got %.3f", avg_output);
+            fail_count++;
+        end
+    endtask
+
+    // Test 9: Uniform Attention (all positions equal)
+    task test_uniform_attention();
+        real avg_output;
+        real error;
+        $display("\n=== Test 9: Uniform Attention Distribution ===");
+        test_num = 9;
+        
+        @(posedge clk);
+        clear_cache = 1;
+        @(posedge clk);
+        clear_cache = 0;
+        @(posedge clk);
+        
+        // Create 4 positions with identical keys but different values
+        for (int p = 0; p < 4; p++) begin
+            for (int i = 0; i < HEAD_DIM; i++) begin
+                q_in[i] = float_to_fixed(2.0);
+                k_in[i] = float_to_fixed(2.0);  // All keys identical
+                v_in[i] = float_to_fixed(real'(p + 1));  // Values: 1,2,3,4
+            end
+            pos = p;
+            start = 1;
+            @(posedge clk);
+            start = 0;
+            wait_for_valid();
+            @(posedge clk);
+        end
+        
+        display_output("Uniform attention output:");
+        
+        // All Q·K scores are equal, so attention should be uniform
+        // With 4 positions having values [1,2,3,4], each with 0.25 weight:
+        // Output = 0.25×1 + 0.25×2 + 0.25×3 + 0.25×4 = 2.5
+        
+        avg_output = 0.0;
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            avg_output += fixed_to_float(head_out[i]);
+        end
+        avg_output = avg_output / HEAD_DIM;
+        
+        $display("Average output: %.3f", avg_output);
+        $display("Expected: 2.5 (uniform average of 1,2,3,4)");
+        
+        error = avg_output - 2.5;
+        if (error < 0) error = -error;
+        
+        if (error < 0.5) begin
+            $display("✓ Test 9 PASSED - uniform attention distribution works");
+            pass_count++;
+        end else begin
+            $display("✗ Test 9 FAILED - uniform attention incorrect");
+            $display("  Expected 2.5, got %.3f (error: %.3f)", avg_output, error);
+            fail_count++;
+        end
+    endtask
+
+    // Test 10: Negative Values in K and V
+    task test_negative_keys_values();
+        real avg_output;
+        $display("\n=== Test 10: Negative Keys and Values ===");
+        test_num = 10;
+        
+        @(posedge clk);
+        clear_cache = 1;
+        @(posedge clk);
+        clear_cache = 0;
+        @(posedge clk);
+        
+        // Position 0: K=[-2,-2,-2,-2], V=[5,5,5,5]
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(3.0);
+            k_in[i] = float_to_fixed(-2.0);  // Negative keys
+            v_in[i] = float_to_fixed(5.0);
+        end
+        pos = 0;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        @(posedge clk);
+        
+        // Position 1: K=[3,3,3,3], V=[-10,-10,-10,-10]
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(3.0);
+            k_in[i] = float_to_fixed(3.0);
+            v_in[i] = float_to_fixed(-10.0);  // Negative values
+        end
+        pos = 1;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        
+        display_output("Negative K/V output:");
+        
+        // Q·K[0] = 3×(-2)×4 = -24 (negative dot product)
+        // Q·K[1] = 3×3×4 = 36 (positive dot product)
+        // Position 1 should dominate attention
+        // Output should be close to V[1]=[-10,-10,-10,-10]
+        
+        avg_output = 0.0;
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            avg_output += fixed_to_float(head_out[i]);
+        end
+        avg_output = avg_output / HEAD_DIM;
+        
+        $display("Average output: %.3f", avg_output);
+        $display("Expected: close to -10.0 (focused on position 1 with negative values)");
+        
+        if (avg_output < -5.0 && avg_output > -12.0) begin
+            $display("✓ Test 10 PASSED - handles negative keys and values correctly");
+            pass_count++;
+        end else begin
+            $display("✗ Test 10 FAILED - negative value handling incorrect");
+            $display("  Expected around -10.0, got %.3f", avg_output);
+            fail_count++;
+        end
+    endtask
+
+    // Test 11: Recency Bias Test (should attend to recent positions)
+    task test_recency_bias();
+        real prev_output;
+        real avg_out;
+        logic recency_trend;
+        $display("\n=== Test 11: Recency Bias with Varying Queries ===");
+        test_num = 11;
+        
+        @(posedge clk);
+        clear_cache = 1;
+        @(posedge clk);
+        clear_cache = 0;
+        @(posedge clk);
+        
+        // Build up a sequence where each position's query should
+        // match its own key better than previous keys
+        
+        prev_output = 0.0;
+        recency_trend = 1;
+        
+        for (int p = 0; p < 5; p++) begin
+            // Each position: K and V increase with position
+            for (int i = 0; i < HEAD_DIM; i++) begin
+                // Query always looks for high values
+                q_in[i] = float_to_fixed(10.0);
+                // Keys increase with position (0.5, 1.0, 1.5, 2.0, 2.5)
+                k_in[i] = float_to_fixed(real'(p + 1) * 0.5);
+                // Values also increase with position
+                v_in[i] = float_to_fixed(real'(p + 1) * 2.0);
+            end
+            pos = p;
+            start = 1;
+            @(posedge clk);
+            start = 0;
+            wait_for_valid();
+            
+            // Calculate average output
+            avg_out = 0.0;
+            for (int i = 0; i < HEAD_DIM; i++) begin
+                avg_out += fixed_to_float(head_out[i]);
+            end
+            avg_out = avg_out / HEAD_DIM;
+            
+            $display("  Position %0d output: %.3f", p, avg_out);
+            
+            // After first position, each output should be larger than previous
+            // (attention shifts toward newer, higher-scoring positions)
+            if (p > 0) begin
+                if (avg_out <= prev_output) begin
+                    recency_trend = 0;
+                    $display("    WARNING: Output not increasing (%.3f <= %.3f)", 
+                            avg_out, prev_output);
+                end
+            end
+            
+            prev_output = avg_out;
+            @(posedge clk);
+        end
+        
+        if (recency_trend) begin
+            $display("✓ Test 11 PASSED - attention properly shifts to higher-scoring recent positions");
+            pass_count++;
+        end else begin
+            $display("✗ Test 11 FAILED - recency trend not observed");
+            $display("  Expected outputs to increase as better-matching positions are added");
+            fail_count++;
+        end
+    endtask
+
+    // ===========================================================================
+    // Additional Debug Test: Verify Attention Weights Distribution
+    // ===========================================================================
+    task test_attention_weight_verification();
+        real weight_sum;
+        real avg_output;
+        real w;
+        real weight_error;
+        real output_error;
+        $display("\n=== Test 12: Attention Weight Distribution Verification ===");
+        test_num = 12;
+        @(posedge clk);
+        clear_cache = 1;
+        @(posedge clk);
+        clear_cache = 0;
+        @(posedge clk);
+        
+        // Create 3 positions with known attention distribution
+        // Position 0: K=[1,1,1,1], V=[10,10,10,10]
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(1.0);
+            k_in[i] = float_to_fixed(1.0);
+            v_in[i] = float_to_fixed(10.0);
+        end
+        pos = 0;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        @(posedge clk);
+        
+        // Position 1: K=[1,1,1,1], V=[20,20,20,20]
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(1.0);
+            k_in[i] = float_to_fixed(1.0);
+            v_in[i] = float_to_fixed(20.0);
+        end
+        pos = 1;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        @(posedge clk);
+        
+        // Position 2: K=[1,1,1,1], V=[30,30,30,30]
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            q_in[i] = float_to_fixed(1.0);
+            k_in[i] = float_to_fixed(1.0);
+            v_in[i] = float_to_fixed(30.0);
+        end
+        pos = 2;
+        start = 1;
+        @(posedge clk);
+        start = 0;
+        wait_for_valid();
+        
+        // All keys equal, so attention should be uniform: 1/3 each
+        // Output = (1/3)×10 + (1/3)×20 + (1/3)×30 = 20.0
+        
+        display_output("Weight verification output:");
+        
+        $display("Internal attention weights:");
+        weight_sum = 0.0;
+        for (int i = 0; i <= 2; i++) begin
+            w = fixed_to_float(dut.attn_weights[i]);
+            weight_sum += w;
+            $display("  weight[%0d] = %.6f", i, w);
+        end
+        $display("  Sum of weights = %.6f (should be ~1.0)", weight_sum);
+        
+        avg_output = 0.0;
+        for (int i = 0; i < HEAD_DIM; i++) begin
+            avg_output += fixed_to_float(head_out[i]);
+        end
+        avg_output = avg_output / HEAD_DIM;
+        
+        $display("Average output: %.3f", avg_output);
+        $display("Expected: 20.0 (uniform average of 10,20,30)");
+        
+        weight_error = weight_sum - 1.0;
+        if (weight_error < 0) weight_error = -weight_error;
+        
+        output_error = avg_output - 20.0;
+        if (output_error < 0) output_error = -output_error;
+        
+        if (weight_error < 0.1 && output_error < 1.0) begin
+            $display("✓ Test 12 PASSED - attention weights sum to 1.0 and output is correct");
+            pass_count++;
+        end else begin
+            $display("✗ Test 12 FAILED");
+            if (weight_error >= 0.1) 
+                $display("  Weight sum error: %.6f (should be < 0.1)", weight_error);
+            if (output_error >= 1.0)
+                $display("  Output error: %.3f (should be < 1.0)", output_error);
+            fail_count++;
+        end
+    endtask
+
+    // ===========================================================================
+    // Usage Instructions:
+    // ===========================================================================
+    // Add these tasks to your tb_attention_head.sv file, then in the main initial block,
+    // after test_cache_clear(), add:
+    //
+    //    test_strong_attention_focus();      // Test 8
+    //    test_uniform_attention();            // Test 9
+    //    test_negative_keys_values();         // Test 10
+    //    test_recency_bias();                 // Test 11
+    //    test_attention_weight_verification(); // Test 12
+    //
+    // Update the summary to show "Total tests: 12" instead of "7"
+    // ===========================================================================
     
     // -----------------------------------------------------------------------
     // Main Test Sequence
@@ -474,6 +871,11 @@ module tb_attention_head;
         test_zero_inputs();
         test_max_length();
         test_cache_clear();
+        test_strong_attention_focus();      // Test 8
+        test_uniform_attention();            // Test 9
+        test_negative_keys_values();         // Test 10
+        test_recency_bias();                 // Test 11
+        test_attention_weight_verification(); // Test 12
         
         // Summary
         $display("\n========================================");

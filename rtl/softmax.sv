@@ -1,5 +1,10 @@
-// Softmax Module - PRODUCTION READY (FINAL)
-// Computes: softmax(logits) with numerical stability
+// ===========================================================================
+// Softmax Module - CORRECTED FOR MASKED ATTENTION
+// ===========================================================================
+// Properly handles masked positions (attention mask) by setting their
+// exponentials to ZERO, not just very small values
+// ===========================================================================
+
 module softmax 
     import microgpt_pkg::*;
 #(
@@ -10,12 +15,10 @@ module softmax
     input  logic        rst_n,
     input  logic        start,
     input  fixed_t      logits [VEC_LEN-1:0],
-    input  fixed_t      temperature,
     output fixed_t      probs [VEC_LEN-1:0],
     output logic        valid
 );
 
-    // ALL DECLARATIONS AT TOP!
     typedef enum logic [2:0] {
         SM_IDLE,
         SM_FIND_MAX,
@@ -35,9 +38,11 @@ module softmax
     logic signed [31:0] dividend;
     int idx;
     
-    // Exponential lookup table for exp(x) where x in [-8, 8]
-    // 256 entries covering the range
+    // Exponential lookup table
     fixed_t exp_table [0:255];
+    
+    // CRITICAL: Mask threshold - values below this are treated as -infinity (masked)
+    localparam fixed_t MASK_THRESHOLD = 16'sh8000;  // -128.0 in Q8.8
     
     initial begin
         // Populate exp table: exp(x) for x from -8.0 to +8.0
@@ -45,14 +50,12 @@ module softmax
             real x, exp_val;
             x = -8.0 + (i * 16.0 / 256.0);
             exp_val = $exp(x);
-            // Clamp to representable range
             if (exp_val > 127.0) exp_val = 127.0;
             if (exp_val < 0.0001) exp_val = 0.0001;
             exp_table[i] = float_to_fixed(exp_val);
         end
     end
     
-    // Lookup exponential function
     function automatic fixed_t lookup_exp(fixed_t x);
         logic signed [15:0] x_int;
         logic [7:0] table_idx;
@@ -65,7 +68,6 @@ module softmax
         if (x_int > float_to_fixed(8.0))
             return float_to_fixed(127.0);
         
-        // Map to table index [0, 255]
         table_idx = ((x_int + float_to_fixed(8.0)) >>> 4);
         if (table_idx > 255) table_idx = 255;
         
@@ -95,9 +97,10 @@ module softmax
                 end
                 
                 SM_FIND_MAX: begin
-                    // Find maximum logit for numerical stability
+                    // Find maximum logit (ignoring masked positions)
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        if (logits[i] > max_logit) begin
+                        // Only consider non-masked logits
+                        if (logits[i] > max_logit && logits[i] > MASK_THRESHOLD) begin
                             max_logit <= logits[i];
                         end
                     end
@@ -106,19 +109,28 @@ module softmax
                 
                 SM_SCALE: begin
                     // Subtract max for numerical stability
-                    // Note: Temperature input is present but not used (assumes T=1.0)
                     for (int i = 0; i < VEC_LEN; i++) begin
                         fixed_t shifted;
-                        shifted = logits[i] - max_logit;
-                        scaled[i] <= shifted;
+                        // Keep masked values as is (very negative)
+                        if (logits[i] <= MASK_THRESHOLD) begin
+                            scaled[i] <= MASK_THRESHOLD;
+                        end else begin
+                            shifted = logits[i] - max_logit;
+                            scaled[i] <= shifted;
+                        end
                     end
                     state <= SM_EXP;
                 end
                 
                 SM_EXP: begin
                     // Compute exponentials
+                    // CRITICAL FIX: Masked positions get ZERO, not small value
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        exponentials[i] <= lookup_exp(scaled[i]);
+                        if (scaled[i] <= MASK_THRESHOLD) begin
+                            exponentials[i] <= '0;  // Exactly zero for masked positions
+                        end else begin
+                            exponentials[i] <= lookup_exp(scaled[i]);
+                        end
                     end
                     exp_sum <= '0;
                     state <= SM_SUM;
@@ -137,8 +149,14 @@ module softmax
                 SM_NORMALIZE: begin
                     // Normalize: prob[i] = exp[i] / sum
                     for (int i = 0; i < VEC_LEN; i++) begin
-                        dividend = exponentials[i] <<< FRAC_BITS;
-                        probs[i] <= fixed_t'(dividend / exp_sum);
+                        if (exponentials[i] == '0) begin
+                            // Masked position: probability is exactly 0
+                            probs[i] <= '0;
+                        end else begin
+                            // Normal case: divide by sum
+                            dividend = exponentials[i] <<< FRAC_BITS;
+                            probs[i] <= fixed_t'(dividend / exp_sum);
+                        end
                     end
                     state <= SM_DONE;
                 end

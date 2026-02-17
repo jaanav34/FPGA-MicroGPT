@@ -56,6 +56,11 @@ proc setup_test {test_name} {
             add_files -fileset sim_1 -norecurse tb/tb_mlp.sv
             set_property top tb_mlp [get_filesets sim_1]
         }
+        "transformer_layer" {
+            add_files -fileset sim_1 -norecurse rtl/transformer_layer.sv
+            add_files -fileset sim_1 -norecurse tb/tb_transformer_layer.sv
+            set_property top tb_transformer_layer [get_filesets sim_1]
+        }
         default {
             puts "ERROR: Unknown test '$test_name'"
             puts "Available tests:"
@@ -91,6 +96,7 @@ puts "    softmax       - Softmax with temperature"
 puts "    attention      - Single-head attention mechanism"
 puts "    multi         - Multi-head attention"
 puts "    mlp           - Multi-layer perceptron"
-puts ""
+puts "  LEVEL 3 (Full Layer Integration):"
+puts "    transformer_layer - Transformer layer integration"
 puts "Example: setup_test matrix_vector"
 puts "         launch_simulation"

@@ -1,22 +1,46 @@
-// microGPT FPGA Package - TESTED VERSION
-// Global parameters and type definitions
+// ===========================================================================
+// microGPT FPGA Package - Q12.4 PRECISION + TOP-K SAMPLING
+// ===========================================================================
+// Upgraded from Q8.8 to Q12.4 for better transformer accuracy
+// Added top-k sampling parameters for non-deterministic generation
+// ===========================================================================
+
 package microgpt_pkg;
 
-    // Model Architecture Parameters
-    parameter int VOCAB_SIZE = 27;      // 26 letters + BOS token
-    parameter int N_EMBD = 16;          // Embedding dimension
-    parameter int N_HEAD = 4;           // Number of attention heads
-    parameter int N_LAYER = 1;          // Number of transformer layers
-    parameter int BLOCK_SIZE = 16;      // Maximum sequence length
-    parameter int HEAD_DIM = N_EMBD / N_HEAD;  // 4
-    parameter int MLP_DIM = 4 * N_EMBD; // 64
-    
-    // Fixed-point representation (Q8.8 format: 8 integer bits, 8 fractional bits)
+    // -----------------------------------------------------------------------
+    // Model Architecture
+    // -----------------------------------------------------------------------
+    parameter int VOCAB_SIZE = 27;
+    parameter int N_EMBD     = 16;
+    parameter int N_HEAD     = 4;
+    parameter int N_LAYER    = 1;
+    parameter int BLOCK_SIZE = 16;
+    parameter int HEAD_DIM   = N_EMBD / N_HEAD;
+    parameter int MLP_DIM    = 4 * N_EMBD;
+
+    // -----------------------------------------------------------------------
+    // Fixed-Point: Q12.4 (12 integer bits, 4 fractional bits)
+    // -----------------------------------------------------------------------
+    // Range:      [-2048.0, +2047.9375]
+    // Precision:  1/16 = 0.0625
+    // Why:        Wider range prevents saturation in residual connections
+    //             Better suited for Transformer's accumulating values
+    // -----------------------------------------------------------------------
     parameter int DATA_WIDTH = 16;
-    parameter int FRAC_BITS = 8;
-    parameter int INT_BITS = DATA_WIDTH - FRAC_BITS;
-    
-    // Memory parameters
+    parameter int FRAC_BITS  = 4;
+    parameter int INT_BITS   = DATA_WIDTH - FRAC_BITS;  // 12
+
+    // -----------------------------------------------------------------------
+    // Top-K Sampling Configuration
+    // -----------------------------------------------------------------------
+    parameter int TOP_K      = 5;       // Sample from top-5 tokens
+    parameter int TEMP_SHIFT = 1;       // Temperature = 2^(-TEMP_SHIFT)
+                                         // TEMP_SHIFT=1 → temp=0.5
+                                         // TEMP_SHIFT=2 → temp=0.25
+
+    // -----------------------------------------------------------------------
+    // Memory
+    // -----------------------------------------------------------------------
     parameter int PARAM_ADDR_WIDTH = 16;
     parameter int TOTAL_PARAMS = 
         (VOCAB_SIZE * N_EMBD) +         // wte
@@ -30,58 +54,49 @@ package microgpt_pkg;
             (MLP_DIM * N_EMBD) +        // mlp_fc1
             (N_EMBD * MLP_DIM)          // mlp_fc2
         );
-    
-    // Control signals
-    typedef enum logic [2:0] {
-        IDLE,
-        LOAD_PARAMS,
-        PROCESS_TOKEN,
-        COMPUTE_ATTN,
-        COMPUTE_MLP,
-        GENERATE_OUTPUT,
-        DONE
-    } state_t;
-    
-    // Fixed-point arithmetic
+
+    // -----------------------------------------------------------------------
+    // Fixed-Point Type
+    // -----------------------------------------------------------------------
     typedef logic signed [DATA_WIDTH-1:0] fixed_t;
+
+    // -----------------------------------------------------------------------
+    // Arithmetic Functions
+    // -----------------------------------------------------------------------
     
-    // Convert float to fixed-point
+    // Float → Q12.4
     function automatic fixed_t float_to_fixed(real f);
         logic signed [31:0] temp;
         temp = $rtoi(f * (2.0 ** FRAC_BITS));
-        // Saturate to range
-        if (temp > 32767) temp = 32767;
+        if (temp >  32767) temp =  32767;   // saturate
         if (temp < -32768) temp = -32768;
         return fixed_t'(temp);
     endfunction
-    
-    // Convert fixed-point to float
+
+    // Q12.4 → Float
     function automatic real fixed_to_float(fixed_t f);
         return real'(f) / (2.0 ** FRAC_BITS);
     endfunction
-    
-    // Multiply two fixed-point numbers
+
+    // Q12.4 × Q12.4 → Q12.4
     function automatic fixed_t fixed_mul(fixed_t a, fixed_t b);
         logic signed [2*DATA_WIDTH-1:0] product;
         product = a * b;
         return fixed_t'(product >>> FRAC_BITS);
     endfunction
-    
-    // Add two fixed-point numbers
+
+    // Q12.4 + Q12.4 → Q12.4 (with saturation)
     function automatic fixed_t fixed_add(fixed_t a, fixed_t b);
-        return a + b;
+        logic signed [DATA_WIDTH:0] sum;  // 17-bit for overflow detection
+        sum = a + b;
+        if (sum > 32767)  return 16'h7FFF;   // saturate high
+        if (sum < -32768) return 16'h8000;   // saturate low
+        return fixed_t'(sum);
     endfunction
-    
-    // ReLU activation
+
+    // ReLU
     function automatic fixed_t relu(fixed_t x);
         return (x > 0) ? x : '0;
-    endfunction
-    
-    // Initialize array to zero
-    function automatic void zero_array_1d(ref fixed_t arr[], input int size);
-        for (int i = 0; i < size; i++) begin
-            arr[i] = '0;
-        end
     endfunction
 
 endpackage : microgpt_pkg

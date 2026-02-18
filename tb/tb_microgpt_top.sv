@@ -20,6 +20,7 @@ module tb_microgpt_top;
     int          token_count;
     real         start_time;
     real         end_time;
+    int         random_delay;
 
     // --- DUT Instantiation ---
     microgpt_top dut (
@@ -66,7 +67,7 @@ module tb_microgpt_top;
             
             // FORCE START WITH 'b' (Token 1) instead of BOS
             // Note: You may need to add a "force" or wait for the IDLE state to transition
-            dut.cur_token = 1;
+            dut.cur_token = 12;
             // Loop until BOS token (gen_done) or limit reached
             while (!gen_done && token_count < max_tokens) begin
                 // Wait for the engine to compute the token
@@ -104,7 +105,10 @@ module tb_microgpt_top;
         $display("========================================");
 
         reset_system();
-        
+        // random delay before starting generation ---
+        random_delay = $urandom_range(10, 100); 
+        $display("Applying initial entropy delay: %0d cycles", random_delay);
+        repeat(random_delay) @(posedge clk);
         // Start timer
         start_time = $realtime;
         

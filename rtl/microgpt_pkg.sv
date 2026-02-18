@@ -33,8 +33,8 @@ package microgpt_pkg;
     // -----------------------------------------------------------------------
     // Top-K Sampling Configuration
     // -----------------------------------------------------------------------
-    parameter int TOP_K      = 5;       // Sample from top-5 tokens
-    parameter int TEMP_SHIFT = 1;       // Temperature = 2^(-TEMP_SHIFT)
+    parameter int TOP_K      = 15;       // Sample from top-5 tokens
+    parameter int TEMP_SHIFT = 5;       // Temperature = 2^(-TEMP_SHIFT)
                                          // TEMP_SHIFT=1 → temp=0.5
                                          // TEMP_SHIFT=2 → temp=0.25
 

@@ -48,6 +48,7 @@ module microgpt_top
     localparam int ADDR_ATTN_WO  = 1888;
     localparam int ADDR_MLP_FC1  = 2144;
     localparam int ADDR_MLP_FC2  = 3168;
+    logic [15:0] entropy_counter;
 
     // -----------------------------------------------------------------------
     // State machine
@@ -187,12 +188,18 @@ module microgpt_top
         .clk      (clk),
         .rst_n    (rst_n),
         .start    (sample_start),
-        .seed     (cur_pos),      // Use position as LFSR seed for variety
+        .seed     (entropy_counter[4:0]), // USE TIMER INSTEAD OF cur_pos
         .logits   (lm_logits),
         .token_out(sample_out),
         .valid    (sample_valid)
     );
-
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            entropy_counter <= $urandom; // Initial arbitrary value
+        end else begin
+            entropy_counter <= entropy_counter + 1; // Always counts up
+        end
+    end
     // -----------------------------------------------------------------------
     // Main FSM (modified for top-k sampling)
     // -----------------------------------------------------------------------

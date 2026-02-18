@@ -5,7 +5,9 @@
 
 module tb_microgpt_top;
     import microgpt_pkg::*;
-
+    // Add these at the top
+    parameter int TOP_K = 5;
+    parameter int TEMP_SHIFT = 1;
     // --- Declarations at module top ---
     logic        clk;
     logic        rst_n;
@@ -29,6 +31,8 @@ module tb_microgpt_top;
     ) dut (
         .clk(clk),                // Correct port mapping
         .rst_n(rst_n),
+        .TOP_K(TOP_K),
+        .TEMP_SHIFT(TEMP_SHIFT)
         .start_gen(start_gen),
         .next_token(next_token),
         .token_out(token_out),
@@ -57,6 +61,9 @@ module tb_microgpt_top;
     task run_generation();
         // --- task declarations ---
         int max_tokens;
+        // Add to task run_generation declarations
+        int f_log;
+        string final_name = "";
         begin
             max_tokens = 20;
             token_count = 0;

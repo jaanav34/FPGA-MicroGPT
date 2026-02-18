@@ -22,6 +22,10 @@
 
 module microgpt_top
     import microgpt_pkg::*;
+#(
+    parameter int TOP_K = 5,      // Now overrideable
+    parameter int TEMP_SHIFT = 1   // Now overrideable
+)
 (
     input  logic        clk,
     input  logic        rst_n,
@@ -105,7 +109,7 @@ module microgpt_top
     fixed_t param_ram [0:TOTAL_PARAMS-1];
 
     initial begin
-        $readmemh("param_q124.mem", param_ram);
+        $readmemh("param.mem", param_ram);
     end
 
     // -----------------------------------------------------------------------

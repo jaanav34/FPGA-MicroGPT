@@ -31,8 +31,6 @@ module tb_microgpt_top;
     ) dut (
         .clk(clk),                // Correct port mapping
         .rst_n(rst_n),
-        .TOP_K(TOP_K),
-        .TEMP_SHIFT(TEMP_SHIFT)
         .start_gen(start_gen),
         .next_token(next_token),
         .token_out(token_out),

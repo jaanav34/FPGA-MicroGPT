@@ -5,3 +5,4 @@ MicroGPT2/
 test_out.txt
 .Xil/ 
 microgpt_env/
+all_generated_names.csv

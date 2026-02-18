@@ -23,8 +23,11 @@ module tb_microgpt_top;
     int         random_delay;
 
     // --- DUT Instantiation ---
-    microgpt_top dut (
-        .clk(clk),
+    microgpt_top #(
+        .TOP_K(TOP_K),            // Correct parameter mapping
+        .TEMP_SHIFT(TEMP_SHIFT)
+    ) dut (
+        .clk(clk),                // Correct port mapping
         .rst_n(rst_n),
         .start_gen(start_gen),
         .next_token(next_token),
@@ -77,7 +80,8 @@ module tb_microgpt_top;
                     $display("  [Pos %0d] Predicted Token ID: %0d (Probable char: %c)", 
                               token_count, token_out, token_out + 97); // Basic char mapping
                     token_count++;
-                    
+                    // Inside the while loop, when a token is valid:
+                    final_name = {final_name, token_out+97}; // Append the character
                     // Request next token
                     @(posedge clk);
                     next_token = 1;
@@ -91,7 +95,19 @@ module tb_microgpt_top;
                     break;
                 end
             end
-            $display("--- Generation Complete: %0d tokens generated ---\n", token_count);
+            // ... after the while loop ...
+        	$display("--- Generation Complete: %0d tokens generated ---\n", token_count);
+
+        	// Open, Write, Flush, and Close explicitly
+        	f_log = $fopen("names_local.csv", "a"); 
+        	if (f_log) begin
+            	$fdisplay(f_log, "%0d, %0d, %s", TOP_K, TEMP_SHIFT, final_name);
+            	$fflush(f_log); // Force write to disk
+            	$fclose(f_log);
+            	$display("DATA_SAVED: Parameters %0d/%0d, Name: %s", TOP_K, TEMP_SHIFT, final_name);
+        	end else begin
+            	$display("ERROR: Could not open names_local.csv for writing");
+        	end
         end
     endtask
 

@@ -148,16 +148,20 @@ module topk_sampler
                 TK_SAMPLE: begin
                     lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
                     rand_val = lfsr;
-                    // Q12.4: Probabilities sum to 1.0 (16). 16-bit rand >> 12 = 0 to 15.
-                    // Q8.8:  Probabilities sum to 1.0 (256). 16-bit rand >> 8 = 0 to 255.
-                    threshold = rand_val >>> (16 - FRAC_BITS);
+                    
+                    // FIX: Use full 16-bit resolution for the threshold check
+                    // Instead of scaling rand_val down to 15, we scale cumsum up to 65535
                     cumsum = '0;
                     token_out = topk_ids[0]; 
+                    
                     for (i = 0; i < K; i++) begin
                         cumsum = fixed_add(cumsum, topk_probs[i]);
-                        if (threshold <= cumsum) begin
+                        
+                        // Compare 16-bit random value against probability scaled to 16-bit range
+                        // (cumsum / 16.0) * 65536  => cumsum * 4096
+                        if (rand_val <= (int'(cumsum) << 12)) begin
                             token_out = topk_ids[i];
-                            break; // Standard exit
+                            break; 
                         end
                     end
                     state <= TK_DONE;

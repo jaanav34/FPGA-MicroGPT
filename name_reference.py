@@ -31,9 +31,8 @@ def generate_golden_reference(state_dict, uchars, start_char='b', max_len=16):
         # In a real check, you'd run the full TransformerLayer forward here
         # logits = model(current_token_tensor) 
         
-        # For now, let's look at the LM Head projection
-        # (Assuming your weights are in state_dict)
-        logits = x @ lm_head.t() 
+        # Simplified: applies only the LM head projection, not the full transformer stack
+        logits = x @ lm_head.t()
         
         # 3. Greedy Argmax (Matches TOP_ARGMAX in SV)
         next_token = torch.argmax(logits).item()

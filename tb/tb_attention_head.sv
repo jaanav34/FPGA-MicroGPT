@@ -471,9 +471,7 @@ module tb_attention_head;
 
     // ===========================================================================
     // Additional Attention Head Tests - Stress Testing
-    // ===========================================================================
     // These tests verify edge cases and attention focusing behavior
-    // Add these tasks to your tb_attention_head.sv file
     // ===========================================================================
 
     // Test 8: Strong Attention Focus (one position dominates)
@@ -828,18 +826,15 @@ module tb_attention_head;
     endtask
 
     // ===========================================================================
-    // Usage Instructions:
-    // ===========================================================================
-    // Add these tasks to your tb_attention_head.sv file, then in the main initial block,
-    // after test_cache_clear(), add:
+    // Extended test invocation (add after test_cache_clear() in the main initial block):
     //
-    //    test_strong_attention_focus();      // Test 8
+    //    test_strong_attention_focus();       // Test 8
     //    test_uniform_attention();            // Test 9
     //    test_negative_keys_values();         // Test 10
     //    test_recency_bias();                 // Test 11
     //    test_attention_weight_verification(); // Test 12
     //
-    // Update the summary to show "Total tests: 12" instead of "7"
+    // Update the summary total to 12 when these are included.
     // ===========================================================================
     
     // -----------------------------------------------------------------------

@@ -1,6 +1,4 @@
-// ===========================================================================
-// Top-K Sampler with Temperature Scaling - PRODUCTION VERSION
-// ===========================================================================
+// Top-K sampler with temperature scaling and LFSR-based multinomial sampling
 module topk_sampler
     import microgpt_pkg::*;
 #(
@@ -22,7 +20,7 @@ module topk_sampler
     output logic        valid            
 );
 
-    // --- ALL DECLARATIONS AT TOP (Synthesis Safe) ---
+    // State and internal arrays
     typedef enum logic [2:0] {
         TK_IDLE,
         TK_FIND_TOPK,      
@@ -42,7 +40,7 @@ module topk_sampler
     fixed_t      exp_vals    [K-1:0];   
     fixed_t      exp_table   [0:255];   
     
-    // Loop and working variables (Using 'int' to prevent infinite 0fs hangs)
+    // Loop variables as int (avoids zero-time simulation hangs with automatic variables)
     int          i, j, m;                
     logic [4:0]  scan_idx;               
     fixed_t      min_topk;               
@@ -149,16 +147,14 @@ module topk_sampler
                     lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
                     rand_val = lfsr;
                     
-                    // FIX: Use full 16-bit resolution for the threshold check
-                    // Instead of scaling rand_val down to 15, we scale cumsum up to 65535
+                    // Scale cumsum to 16-bit range to match rand_val resolution
                     cumsum = '0;
                     token_out = topk_ids[0]; 
                     
                     for (i = 0; i < K; i++) begin
                         cumsum = fixed_add(cumsum, topk_probs[i]);
                         
-                        // Compare 16-bit random value against probability scaled to 16-bit range
-                        // (cumsum / 16.0) * 65536  => cumsum * 4096
+                        // cumsum is Q12.4; multiply by 4096 to map [0,1] → [0,65536]
                         if (rand_val <= (int'(cumsum) << 12)) begin
                             token_out = topk_ids[i];
                             break; 

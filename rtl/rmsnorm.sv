@@ -1,4 +1,4 @@
-// RMS Normalization - PRODUCTION READY (FINAL)
+// RMS Normalization
 // Computes: y = x / sqrt(mean(x^2) + epsilon)
 module rmsnorm 
     import microgpt_pkg::*;
@@ -14,7 +14,7 @@ module rmsnorm
     output logic        valid
 );
 
-    // ALL DECLARATIONS AT TOP!
+    // State and working variables
     typedef enum logic [2:0] {
         RMS_IDLE,
         RMS_SQUARE,
@@ -38,11 +38,9 @@ module rmsnorm
     fixed_t inv_sqrt_table [0:255];
     
     initial begin
-        // Populate inverse square root table with wider range
+        // Inverse sqrt LUT: 256 entries covering 0.001 to 16.0 (step ~0.0624)
         for (int i = 0; i < 256; i++) begin
             real x, inv_s;
-            // Map index to value: 0.001 to 16.0
-            // Step size = (16 - 0.001) / 256 ≈ 0.0624
             x = 0.001 + (i * 0.0624);
             inv_s = 1.0 / $sqrt(x + 0.00001);
             inv_sqrt_table[i] = float_to_fixed(inv_s);

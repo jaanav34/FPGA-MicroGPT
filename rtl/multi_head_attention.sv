@@ -115,7 +115,7 @@ module multi_head_attention
     fixed_t      head_k_in [HEAD_DIM-1:0];
     fixed_t      head_v_in [HEAD_DIM-1:0];
     fixed_t      head_out [HEAD_DIM-1:0];
-    logic [2:0]  current_head;  // Which head we're processing
+    logic [2:0]  current_head;  // Index of the attention head currently being processed
     
     attention_head #(
         .HEAD_DIM(HEAD_DIM),
